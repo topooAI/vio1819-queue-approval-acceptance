@@ -29,11 +29,21 @@ jobs:
       - name: Check the public runtime version
         shell: bash
         run: |
-          headers=$(mktemp)
-          trap 'rm -f "$headers"' EXIT
-          curl --fail --silent --show-error --max-time 20 --proto =https \
-            --dump-header "$headers" --output /dev/null \
-            https://cloud.topoo.ai/__topoo/provider-version-health
-          version=$(awk 'tolower($1)=="x-topoo-runtime-version:" { sub(/\r$/, "", $2); print $2 }' "$headers")
-          [[ $version =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]]
-          printf '%s' "$version" | sha256sum | awk '{ print "Public runtime version SHA-256 " $1 }'
+          python3 - <<'PYTHON'
+          import hashlib
+          import urllib.request
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args):
+                  return None
+
+          opener = urllib.request.build_opener(NoRedirect())
+          endpoint = "https://cloud.topoo.ai/__topoo/provider-version-health"
+          request = urllib.request.Request(endpoint, headers={"User-Agent": "Mozilla/5.0", "Cache-Control": "no-cache"})
+          with opener.open(request, timeout=20) as response:
+              version = response.headers["x-topoo-runtime-version"]
+          fingerprint = hashlib.sha256(version.encode()).hexdigest()
+          if fingerprint != "d0406e53be36867894af22a18e5dacb3d61ba53cb56e7d115be821e0b682ec1c":
+              raise SystemExit("The public runtime differs from the accepted delivery.")
+          print("Public runtime version SHA-256 " + fingerprint)
+          PYTHON
