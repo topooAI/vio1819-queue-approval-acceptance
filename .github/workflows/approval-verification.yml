@@ -3,6 +3,10 @@ run-name: Topoo request ${{ inputs.topoo_dispatch_nonce }}
 on:
   workflow_dispatch:
     inputs:
+      topoo_runner_labels:
+        description: Dedicated verification Runner labels
+        type: string
+        required: true
       topoo_dispatch_nonce:
         description: Public correlation identifier
         type: string
@@ -11,14 +15,16 @@ permissions: {}
 jobs:
   prepare:
     name: Prepare verification
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.topoo_runner_labels) }}
+    timeout-minutes: 3
     steps:
       - run: printf '%s\n' 'Ready to verify the public runtime after approval.'
   verify:
     name: Verify public runtime
     needs: prepare
     environment: approval-verification
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.topoo_runner_labels) }}
+    timeout-minutes: 3
     steps:
       - name: Check the public runtime version
         shell: bash
