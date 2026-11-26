@@ -1,0 +1,33 @@
+name: Public release verification
+run-name: Topoo request ${{ inputs.topoo_dispatch_nonce }}
+on:
+  workflow_dispatch:
+    inputs:
+      topoo_dispatch_nonce:
+        description: Public correlation identifier
+        type: string
+        required: true
+permissions: {}
+jobs:
+  prepare:
+    name: Prepare verification
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' 'Ready to verify the public runtime after approval.'
+  verify:
+    name: Verify public runtime
+    needs: prepare
+    environment: approval-verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the public runtime version
+        shell: bash
+        run: |
+          headers=$(mktemp)
+          trap 'rm -f "$headers"' EXIT
+          curl --fail --silent --show-error --max-time 20 --proto =https \
+            --dump-header "$headers" --output /dev/null \
+            https://cloud.topoo.ai/__topoo/provider-version-health
+          version=$(awk 'tolower($1)=="x-topoo-runtime-version:" { sub(/\r$/, "", $2); print $2 }' "$headers")
+          [[ $version =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]]
+          printf '%s' "$version" | sha256sum | awk '{ print "Public runtime version SHA-256 " $1 }'
